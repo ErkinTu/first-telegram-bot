@@ -1,13 +1,100 @@
-from aiogram import Router
-from aiogram.types import Message
+from aiogram import Router, F
 from aiogram.filters import Command
+from aiogram.types import Message
+from aiogram.utils.formatting import as_marked_section, Bold, as_list
+
+from filters.chat_types import ChatTypeFilter
+from kbds import reply
 
 user_private_router = Router()
+user_private_router.message.filter(ChatTypeFilter(["private"]))
 
+
+# 1 method add keyboard
+# @user_private_router.message(Command("start"))
+# async def start_handler(message: Message):
+#     await message.answer("Pizza-bot запущен!", reply_markup=reply.start_kbd)
+
+# 2 method add keyboard
 @user_private_router.message(Command("start"))
 async def start_handler(message: Message):
-    await message.answer("Pizza-bot запущен!")
+    await message.answer("Pizza-bot запущен!",
+                         reply_markup=reply.start_kbd3.as_markup( # can be used start_kbd3
+                             resize_keyboard=True,
+                             input_field_placeholder='Что вас интересует?'
+                         ))
 
-@user_private_router.message()
-async def echo_handler(message: Message):
-    await message.answer(f"Echo: {message.text}")
+
+@user_private_router.message(Command("help"))
+async def start_handler(message: Message):
+    await message.answer("Доступные команды:")
+
+
+@user_private_router.message(F.text.lower() == "меню")
+@user_private_router.message(Command("menu"), )
+async def start_handler(message: Message):
+    await message.answer("Меню заведения:", reply_markup=reply.remove_kbd)
+
+
+# @user_private_router.message(F.text.lower() == "о нас" or F.text.lower() == "о вас")
+@user_private_router.message(F.text.lower().in_(["о нас", "о вас", "о пиццерии"]))
+@user_private_router.message(Command("about"))
+async def start_handler(message: Message):
+    await message.answer("Информация о нас:")
+
+
+@user_private_router.message((F.text.lower().contains('оплат')) | (F.text.lower() == "способы оплаты"))
+@user_private_router.message(Command("pyment"))
+async def payment_handler(message: Message):
+
+    text = as_marked_section(
+        Bold("Способы оплаты:"),
+        "Картой в боте",
+        "При получении карта/наличные",
+        "В заведении",
+        marker='✅ '
+    )
+
+    # await message.answer("Способы оплаты:")
+    await message.answer(text.as_html())
+
+@user_private_router.message((F.text.lower().contains('доставк')) | (F.text.lower() == 'способы доставки'))
+@user_private_router.message(Command("shipping"))
+async def start_handler(message: Message):
+
+    text = as_list(
+        as_marked_section(
+            Bold("Способы доставки/заказа:"),
+            "Курьер",
+            "Самовывоз",
+            "Покушаю у Вас",
+            marker='✅ '
+        ),
+        as_marked_section(
+            Bold("Нельзя"),
+            "Почта",
+            "Голуби",
+            marker='❌ ',
+        ),
+        sep='\n-----------------------\n'
+    )
+    await message.answer(text.as_html())
+
+    # await message.answer("<b>Способы доставки:</b>")
+    # await message.answer("<b>Способы доставки:</b>", parse_mode=ParseMode.HTML) # перенесли в bot
+
+
+# @user_private_router.message()
+# async def echo_handler(message: Message):
+#     await message.answer(f"Echo: {message.text}")
+
+
+@user_private_router.message(F.contact)
+async def get_contact_handler(message: Message):
+    await message.answer(f"Номер получены")
+    await message.answer(str(message.contact))
+
+@user_private_router.message(F.location)
+async def get_location_handler(message: Message):
+    await message.answer(f"Локация получена")
+    await message.answer(str(message.location))
