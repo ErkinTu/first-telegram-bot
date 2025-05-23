@@ -4,6 +4,8 @@ import os
 
 # 🧩 Third-party packages
 from aiogram import Bot, Dispatcher, types
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from dotenv import load_dotenv, find_dotenv
 
 # 🏠 Local modules
@@ -16,7 +18,10 @@ load_dotenv(find_dotenv())
 
 
 async def main():
-    bot = Bot(token=os.getenv("TOKEN"))
+    bot = Bot(
+        token=os.getenv("TOKEN"),
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML) # с версии 3.7.x
+    )
     dp = Dispatcher()
 
     dp.include_router(user_private_router)
