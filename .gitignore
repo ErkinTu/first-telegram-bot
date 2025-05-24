@@ -12,3 +12,8 @@ wheels/
 
 #IDE
 .idea
+
+# Ignore SQLite3
+*.sqlite3
+*.db
+*.sqlite
