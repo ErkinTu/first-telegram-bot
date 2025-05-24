@@ -11,12 +11,38 @@ from dotenv import load_dotenv, find_dotenv
 
 # 🏠 Local modules
 from common.bot_cmds_list import private
+from database.engine import db
 from handlers.admin_private import admin_router
 from handlers.user_group import user_group_router
 from handlers.user_private import user_private_router
+from middlewares.db import DataBaseSession
 
 # 😊 Loading environment variables
 load_dotenv(find_dotenv())
+
+
+async def on_startup(bot: Bot):
+    run_param = False
+    if run_param:
+        await db.drop_db()
+
+    await db.create_db()
+
+
+async def on_shutdown(bot: Bot):
+    try:
+        print("Graceful shutdown started...")
+
+        if bot:
+            await bot.close()
+
+        if 'db' in globals() and hasattr(db, 'dispose'):
+            await db.close()
+
+    except Exception as e:
+        print(f"Shutdown error: {e}")
+    finally:
+        print("Shutdown completed")
 
 
 async def main():
@@ -26,6 +52,11 @@ async def main():
     )
     bot.my_admins_list = []
     dp = Dispatcher(fsm_strategy=FSMStrategy.USER_IN_CHAT)
+
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
+
+    dp.update.middleware(DataBaseSession(session_pool=db.session_maker))
 
     dp.include_router(user_private_router)
     dp.include_router(user_group_router)

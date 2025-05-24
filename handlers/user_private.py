@@ -1,8 +1,10 @@
-from aiogram import Router, F
+from aiogram import Router, F, types
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from aiogram.utils.formatting import as_marked_section, Bold, as_list
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from database.orm_query import orm_get_products
 from filters.chat_types import ChatTypeFilter
 from kbds.reply import get_keyboard
 
@@ -45,9 +47,19 @@ async def start_handler(message: Message):
 
 @user_private_router.message(F.text.lower() == "меню")
 @user_private_router.message(Command("menu"), )
-async def start_handler(message: Message):
+async def start_handler(message: Message, session: AsyncSession):
     # await message.answer("Меню заведения:", reply_markup=reply.remove_kbd)
-    await message.answer("Меню заведения:")
+    for product in await orm_get_products(session):
+        caption = (
+            f"<strong>{product.name}</strong>\n"
+            f"{product.description}\n"
+            f"Стоимость: {round(product.price, 2)} $."
+        )
+        await message.answer_photo(
+            product.image,
+            caption=caption
+        )
+    await message.answer("Меню заведения:", reply_markup=types.ReplyKeyboardRemove())
 
 
 # @user_private_router.message(F.text.lower() == "о нас" or F.text.lower() == "о вас")
