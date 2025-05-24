@@ -52,6 +52,14 @@ class Database:
         async with self.session_maker() as session:
             yield session
 
+    async def close(self):
+        try:
+            if self.engine:
+                await self.engine.dispose()
+                print("Database engine disposed")
+        except Exception as e:
+            print(f"Error closing database: {e}")
+
 
 db = Database()
 

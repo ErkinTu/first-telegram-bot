@@ -30,8 +30,19 @@ async def on_startup(bot: Bot):
 
 
 async def on_shutdown(bot: Bot):
-    print("Shutting down...")
-    await bot.close()
+    try:
+        print("Graceful shutdown started...")
+
+        if bot:
+            await bot.close()
+
+        if 'db' in globals() and hasattr(db, 'dispose'):
+            await db.close()
+
+    except Exception as e:
+        print(f"Shutdown error: {e}")
+    finally:
+        print("Shutdown completed")
 
 
 async def main():
