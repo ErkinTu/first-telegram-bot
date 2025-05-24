@@ -1,4 +1,4 @@
-from aiogram import Router, F
+from aiogram import Router, F, types
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from aiogram.utils.formatting import as_marked_section, Bold, as_list
@@ -47,7 +47,7 @@ async def start_handler(message: Message):
 @user_private_router.message(Command("menu"), )
 async def start_handler(message: Message):
     # await message.answer("Меню заведения:", reply_markup=reply.remove_kbd)
-    await message.answer("Меню заведения:")
+    await message.answer("Меню заведения:", reply_markup=types.ReplyKeyboardRemove())
 
 
 # @user_private_router.message(F.text.lower() == "о нас" or F.text.lower() == "о вас")
