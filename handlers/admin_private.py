@@ -1,6 +1,6 @@
 from aiogram import F
 from aiogram import Router, types
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command, StateFilter, or_f
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
@@ -18,6 +18,22 @@ ADMIN_KB = get_keyboard(
     placeholder="Выбрать действие",
     sizes=(2,),
 )
+
+
+class AddProduct(StatesGroup):
+    name = State()
+    description = State()
+    price = State()
+    image = State()
+
+    product_for_update = None
+
+    texts = {
+        'AddProduct:name': 'Введите название товара заново',
+        'AddProduct:description': 'Введите описание товара заново',
+        'AddProduct:price': 'Введите цену товара заново',
+        'AddProduct:image': 'Прикрепите фото товара заново',
+    }
 
 
 @admin_router.message(Command("admin"))
@@ -44,21 +60,35 @@ async def starring_at_product(message: types.Message, session: AsyncSession):
     await message.answer("Ок, вот список товаров")
 
 
+@admin_router.callback_query(F.data.startswith("delete_"))
+async def delete_product_callback(callback: types.CallbackQuery, session: AsyncSession):
+    product_id = int(callback.data.split("_")[-1])
+    try:
+        await orm_delete_product(session, product_id)
+        await callback.answer("Товар успешно удален")
+        await callback.message.answer("Товар удален")
+    except Exception as e:
+        await callback.answer(f"Произошла ошибка при удалении товара: {e}")
+
+
+# Изменение товара
+@admin_router.callback_query(StateFilter(None), F.data.startswith("update_"))
+async def update_product_callback(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):
+    product_id = int(callback.data.split("_")[-1])
+    product_for_update_ = await orm_get_product(session, product_id)
+
+    AddProduct.product_for_update = product_for_update_
+    await callback.answer()
+    await callback.message.answer(
+        "Введите новое название товара или '.' чтобы оставить как есть\n" 
+        f"{AddProduct.product_for_update.name}\n"
+        f"{AddProduct.product_for_update.description}\n",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+    await state.set_state(AddProduct.name)
+
+
 # FSM
-class AddProduct(StatesGroup):
-    name = State()
-    description = State()
-    price = State()
-    image = State()
-
-    texts = {
-        'AddProduct:name': 'Введите название товара заново',
-        'AddProduct:description': 'Введите описание товара заново',
-        'AddProduct:price': 'Введите цену товара заново',
-        'AddProduct:image': 'Прикрепите фото товара заново',
-    }
-
-
 @admin_router.message(StateFilter(None), F.text == "Добавить товар")
 async def add_product(message: types.Message, state: FSMContext):
     await message.answer("Введите название товара", reply_markup=types.ReplyKeyboardRemove())
@@ -71,7 +101,8 @@ async def cancel_handler(message: types.Message, state: FSMContext) -> None:
     current_state = await state.get_state()
     if current_state is None:
         return
-
+    if AddProduct.product_for_update:
+        AddProduct.product_for_update = None
     await state.clear()
     await message.answer("Действия отменены", reply_markup=ADMIN_KB)
 
@@ -94,9 +125,22 @@ async def cancel_handler(message: types.Message, state: FSMContext) -> None:
         previous_state = step
 
 
+# @admin_router.message(AddProduct.name, F.text)
+# async def add_name(message: types.Message, state: FSMContext):
+#     await state.update_data({"name": message.text})
+#     await message.answer("Введите описание товара")
+#     await state.set_state(AddProduct.description)
+
 @admin_router.message(AddProduct.name, F.text)
 async def add_name(message: types.Message, state: FSMContext):
-    await state.update_data({"name": message.text})
+    if message.text == '.' and AddProduct.product_for_update:
+        await state.update_data(name=AddProduct.product_for_update.name)
+    else:
+        if len(message.text) > 100:
+            await message.answer("Название товара слишком длинное, должно быть менее 64 символов\n Введите заново")
+            return
+
+        await state.update_data(name=message.text)
     await message.answer("Введите описание товара")
     await state.set_state(AddProduct.description)
 
@@ -106,11 +150,38 @@ async def add_name(message: types.Message, state: FSMContext):
     await message.answer("Вы ввели не допустимые данные, введите название товара заново")
 
 
+# @admin_router.message(AddProduct.description, F.text)
+# async def add_description(message: types.Message, state: FSMContext):
+#     await state.update_data({"description": message.text})
+#     await message.answer("Введите цену товара")
+#     await state.set_state(AddProduct.price)
+
 @admin_router.message(AddProduct.description, F.text)
 async def add_description(message: types.Message, state: FSMContext):
-    await state.update_data({"description": message.text})
+    if AddProduct.product_for_update is None:
+        description = message.text
+        if len(description) > 255:
+            await message.answer(
+                "Описание товара слишком длинное, должно быть менее 255 символов\nВведите заново"
+            )
+            return
+    else:
+        description = (
+            AddProduct.product_for_update.description
+            if message.text == '.'
+            else message.text
+        )
+
+        if len(description) > 255:
+            await message.answer(
+                "Описание товара слишком длинное, должно быть менее 255 символов\nВведите заново"
+            )
+            return
+
     await message.answer("Введите цену товара")
+    await state.update_data(description=description)
     await state.set_state(AddProduct.price)
+
 
 
 @admin_router.message(AddProduct.description)
@@ -119,9 +190,26 @@ async def add_description(message: types.Message, state: FSMContext):
 
 
 # Нужна проверка на число
+# @admin_router.message(AddProduct.price, F.text)
+# async def add_price(message: types.Message, state: FSMContext):
+#     await state.update_data({"price": message.text})
+#     await message.answer("Прикрепите фото товара")
+#     await state.set_state(AddProduct.image)
+
 @admin_router.message(AddProduct.price, F.text)
 async def add_price(message: types.Message, state: FSMContext):
-    await state.update_data({"price": message.text})
+    if message.text == '.':
+        await state.update_data(price=AddProduct.product_for_update.price)
+    else:
+        try:
+            price = float(message.text)
+            if price < 0:
+                raise ValueError("Цена не может быть отрицательной")
+            await state.update_data(price=price)
+        except ValueError:
+            await message.answer("Цена должна быть числом больше или равным нулю\n Введите заново")
+            return
+
     await message.answer("Прикрепите фото товара")
     await state.set_state(AddProduct.image)
 
@@ -131,24 +219,69 @@ async def add_price(message: types.Message, state: FSMContext):
     await message.answer("Вы ввели не допустимые данные, введите цену товара заново")
 
 
+# @admin_router.message(AddProduct.image, F.photo)
+# async def add_photo(message: types.Message, state: FSMContext, session: AsyncSession):
+#     await state.update_data(image=message.photo[-1].file_id)
+#     data = await state.get_data()
+#
+#     try:
+#         await orm_add_product(session, data)
+#         await message.answer("Товар успешно добавлен", reply_markup=ADMIN_KB)
+#         await state.clear()
+#
+#     except Exception as e:
+#         await message.answer(f"Произошла ошибка при добавлении товара: {e}")
+#         await state.clear()
+
+# await orm_add_product(session, data)
+# await state.clear()
+
 @admin_router.message(AddProduct.image, F.photo)
-async def add_photo(message: types.Message, state: FSMContext, session: AsyncSession):
+async def add_image(message: types.Message, state: FSMContext, session: AsyncSession):
     await state.update_data(image=message.photo[-1].file_id)
     data = await state.get_data()
-
-    try:
-        await orm_add_product(session, data)
-        await message.answer("Товар успешно добавлен", reply_markup=ADMIN_KB)
-        await state.clear()
-
-    except Exception as e:
-        await message.answer(f"Произошла ошибка при добавлении товара: {e}")
-        await state.clear()
-
-    # await orm_add_product(session, data)
-    # await state.clear()
+    await orm_add_product(session, data)
+    await message.answer("Товар успешно добавлен", reply_markup=ADMIN_KB)
+    await state.clear()
 
 
 @admin_router.message(AddProduct.image)
-async def add_photo(message: types.Message, state: FSMContext):
-    await message.answer("Вы ввели не допустимые данные, прикрепите фото товара заново")
+async def add_photo(message: types.Message, state: FSMContext, session: AsyncSession):
+    if message.text == '.' and AddProduct.product_for_update:
+        await state.update_data(image=AddProduct.product_for_update.image)
+        data = await state.get_data()
+        await orm_update_product(session, AddProduct.product_for_update.id, data)
+        await message.answer("Товар успешно изменен", reply_markup=ADMIN_KB)
+        AddProduct.product_for_update = None
+        await state.clear()
+    else:
+        await message.answer("Вы ввели не допустимые данные, прикрепите фото товара заново")
+
+
+
+
+# @admin_router.message(AddProduct.image, F.photo)
+# async def add_image(message: types.Message, state: FSMContext, session: AsyncSession):
+#     if message.text == '.':
+#         await state.update_data(image=AddProduct.product_for_update.image)
+#     else:
+#         await state.update_data(image=message.photo[-1].file_id)
+#
+#     data = await state.get_data()
+#
+#     try:
+#         if AddProduct.product_for_update:
+#             await orm_update_product(session, AddProduct.product_for_update.id, data)
+#             await message.answer("Товар успешно изменен", reply_markup=ADMIN_KB)
+#         else:
+#             await orm_add_product(session, data)
+#             await message.answer("Товар успешно добавлен", reply_markup=ADMIN_KB)
+#         await state.clear()
+#     except Exception as e:
+#         await message.answer(
+#             f"Обратитесь к программисту, он опять хочет денег: \n{e}",
+#             reply_markup=ADMIN_KB,
+#         )
+#         await state.clear()
+#
+#     AddProduct.product_for_update = None

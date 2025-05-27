@@ -20,6 +20,8 @@ from middlewares.db import DataBaseSession
 # 😊 Loading environment variables
 load_dotenv(find_dotenv())
 
+# ALLOWED_UPDATES = ['message', 'edited_message', 'callback_query']
+
 
 async def on_startup(bot: Bot):
     run_param = False
@@ -64,7 +66,8 @@ async def main():
 
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_my_commands(private, scope=types.BotCommandScopeAllPrivateChats())
-    await dp.start_polling(bot)
+    # allowed updates - используется чтобы Telegram не присылал лишние данные. (message - новые сообщения, edited_message - редактированные сообщения, callback_query - нажатия на кнопки)
+    await dp.start_polling(bot, allowed_mentions=dp.resolve_used_update_types())
 
 
 if __name__ == '__main__':
