@@ -5,7 +5,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
 
+from common.texts_for_db import description_for_info_pages, categories
 from database.models import Base
+from database.orm_query import orm_create_categories, orm_add_banner_description
 
 load_dotenv()
 
@@ -40,6 +42,10 @@ class Database:
         try:
             async with self.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+
+            async with self.session_maker() as session:
+                await orm_create_categories(session, categories)
+                await orm_add_banner_description(session, description_for_info_pages)
         except SQLAlchemyError as e:
             print(f"Error creating DB: {e}")
             raise

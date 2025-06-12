@@ -6,11 +6,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.orm_query import orm_get_products
 from filters.chat_types import ChatTypeFilter
+from kbds.inline import get_callback_btns
 from kbds.reply import get_keyboard
 
 user_private_router = Router()
 user_private_router.message.filter(ChatTypeFilter(["private"]))
 
+
+@user_private_router.message(CommandStart())
+async def user_private(message: Message):
+    await message.answer("Привет, я виртуальный помощник пиццерии! ",
+                         reply_markup=get_callback_btns(btns={
+                             "Нажми меня": 'some_1',
+                         }))
+
+
+@user_private_router.callback_query(F.data.startswith('some_'))
+async def counter(callback: types.CallbackQuery):
+    number = int(callback.data.split('_')[-1])
+
+    await callback.message.edit_text(
+        text=f"Нажатий - {number}",
+        reply_markup=get_callback_btns(btns={
+            "Нажми еще раз": f'some_{number + 1}',
+        }
+    ))
+
+
+""" Before lesson 8
 
 # 1 method add keyboard
 # @user_private_router.message(Command("start"))
@@ -124,3 +147,4 @@ async def get_contact_handler(message: Message):
 async def get_location_handler(message: Message):
     await message.answer(f"Локация получена")
     await message.answer(str(message.location))
+"""
