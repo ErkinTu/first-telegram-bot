@@ -15,14 +15,16 @@ admin_router.message.filter(IsAdmin(), ChatTypeFilter(["private"]))
 ADMIN_KB = get_keyboard(
     "Добавить товар",
     "Ассортимент",
+    "Добавить/изменить баннер",
     placeholder="Выбрать действие",
-    sizes=(2,),
+    sizes=(2,1),
 )
 
 
 class AddProduct(StatesGroup):
     name = State()
     description = State()
+    category = State()
     price = State()
     image = State()
 
@@ -31,6 +33,7 @@ class AddProduct(StatesGroup):
     texts = {
         'AddProduct:name': 'Введите название товара заново',
         'AddProduct:description': 'Введите описание товара заново',
+        'AddProduct:category': 'Выберите категория заново',
         'AddProduct:price': 'Введите цену товара заново',
         'AddProduct:image': 'Прикрепите фото товара заново',
     }
@@ -86,6 +89,30 @@ async def update_product_callback(callback: types.CallbackQuery, state: FSMConte
         reply_markup=types.ReplyKeyboardRemove()
     )
     await state.set_state(AddProduct.name)
+
+
+# FSM for banners
+class AddBanner(StatesGroup):
+    image = State()
+
+@admin_router.message(StateFilter(None), F.text == 'Добавить/изменить баннер')
+async def add_immage(message: types.Message, state: FSMContext, session: AsyncSession):
+    pages_names = [page.name for page in await orm_get_info_pages(session)]
+    await message.answer(f"Отправьте фото баннера. \nВ описании укажите название для какой страницы: \n{', '.join(pages_names)}\n",
+                         reply_markup=types.ReplyKeyboardRemove())
+    await state.set_state(AddBanner.image)
+
+@admin_router.message(AddBanner.image, F.photo)
+async def add_banner(message: types.Message, state: FSMContext, session: AsyncSession):
+    image_id = message.photo[-1].file_id
+    for_page = message.caption.strip()
+    pages_name = [page.name for page in await orm_get_info_pages(session)]
+    if for_page not in pages_name:
+        await message.answer(f"Введите баннер для одной из страниц: \n{', '.join(pages_name)}\n")
+        return
+    await orm_change_banner_image(session, for_page, image_id)
+    await message.answer("Баннер добавлен/изменен", reply_markup=ADMIN_KB)
+    await state.clear()
 
 
 # FSM
@@ -157,7 +184,7 @@ async def add_name(message: types.Message, state: FSMContext):
 #     await state.set_state(AddProduct.price)
 
 @admin_router.message(AddProduct.description, F.text)
-async def add_description(message: types.Message, state: FSMContext):
+async def add_description(message: types.Message, state: FSMContext, session: AsyncSession):
     if AddProduct.product_for_update is None:
         description = message.text
         if len(description) > 255:
@@ -178,9 +205,11 @@ async def add_description(message: types.Message, state: FSMContext):
             )
             return
 
-    await message.answer("Введите цену товара")
+    categories = await orm_get_categories(session)
+    btns = {category.name: str(category.id) for category in categories}
+    await message.answer("Выберите категорию", reply_markup=get_callback_btns(btns=btns))
     await state.update_data(description=description)
-    await state.set_state(AddProduct.price)
+    await state.set_state(AddProduct.category)
 
 
 
@@ -196,9 +225,27 @@ async def add_description(message: types.Message, state: FSMContext):
 #     await message.answer("Прикрепите фото товара")
 #     await state.set_state(AddProduct.image)
 
+
+@admin_router.callback_query(AddProduct.category)
+async def add_category(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):
+    if int(callback.data) in [category.id for category in await orm_get_categories(session)]:
+        await callback.answer()
+        await state.update_data(category=callback.data)
+        await callback.message.answer("Введите цену товара")
+        await state.set_state(AddProduct.price)
+    else:
+        await callback.message.answer('Выберите категорию из кнопок')
+        await callback.answer()
+
+
+@admin_router.message(AddProduct.category)
+async def add_category(message: types.Message, state: FSMContext):
+    await message.answer("Выберите категорию из кнопок")
+
+
 @admin_router.message(AddProduct.price, F.text)
 async def add_price(message: types.Message, state: FSMContext):
-    if message.text == '.':
+    if message.text == '.' and AddProduct.product_for_update:
         await state.update_data(price=AddProduct.product_for_update.price)
     else:
         try:
