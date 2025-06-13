@@ -1,4 +1,3 @@
-from enum import member
 from string import punctuation
 
 from aiogram import Router, types, F, Bot
@@ -45,5 +44,3 @@ async def cleaner_handler(message: types.Message) -> None:
             f"{message.from_user.first_name}, соблюдайте порядок в чате!"
         )
         await message.delete()
-        # Крайняя мера:
-        # await message.chat.ban(message.from_user.id)
