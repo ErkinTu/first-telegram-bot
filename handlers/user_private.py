@@ -6,13 +6,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.orm_query import orm_get_products
 from filters.chat_types import ChatTypeFilter
-from kbds.inline import get_callback_btns
+from handlers.menu_processing import get_menu_content
+from kbds.inline import get_callback_btns, MenuCallBack
 from kbds.reply import get_keyboard
 
 user_private_router = Router()
 user_private_router.message.filter(ChatTypeFilter(["private"]))
 
 
+@user_private_router.message(CommandStart())
+async def user_private(message: Message, session: AsyncSession):
+    media, reply_markup = await get_menu_content(session, level=0, menu_name='main')
+    await message.answer_photo(media.media, caption=media.caption, reply_markup=reply_markup)
+
+
+@user_private_router.callback_query(MenuCallBack.filter())
+async def user_menu(callback: types.CallbackQuery, session: AsyncSession, callback_data: MenuCallBack):
+    media, reply_markup = await get_menu_content(
+        session=session,
+        level=callback_data.level,
+        menu_name=callback_data.menu_name
+    )
+
+    await callback.message.edit_media(media=media, reply_markup=reply_markup)
+    await callback.answer()
+
+
+""" # Все для тестирования, реактивная кнопка
 @user_private_router.message(CommandStart())
 async def user_private(message: Message):
     await message.answer("Привет, я виртуальный помощник пиццерии! ",
@@ -31,7 +51,7 @@ async def counter(callback: types.CallbackQuery):
             "Нажми еще раз": f'some_{number + 1}',
         }
     ))
-
+"""
 
 """ Before lesson 8
 
