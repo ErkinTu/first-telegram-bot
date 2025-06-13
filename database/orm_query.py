@@ -1,6 +1,5 @@
-import math
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from database.models import Product, Banner, Category, User, Cart
@@ -43,6 +42,7 @@ async def orm_get_categories(session: AsyncSession):
     result = await session.execute(query)
     return result.scalars().all()
 
+
 async def orm_create_categories(session: AsyncSession, categories: list):
     query = select(Category)
     result = await session.execute(query)
@@ -50,6 +50,7 @@ async def orm_create_categories(session: AsyncSession, categories: list):
         return
     session.add_all([Category(name=name) for name in categories])
     await session.commit()
+
 
 ############ Админка: добавить/изменить/удалить товар ########################
 
@@ -98,14 +99,15 @@ async def orm_delete_product(session: AsyncSession, product_id: int):
     await session.execute(query)
     await session.commit()
 
+
 ##################### Добавляем юзера в БД #####################################
 
 async def orm_add_user(
-    session: AsyncSession,
-    user_id: int,
-    first_name: str | None = None,
-    last_name: str | None = None,
-    phone: str | None = None,
+        session: AsyncSession,
+        user_id: int,
+        first_name: str | None = None,
+        last_name: str | None = None,
+        phone: str | None = None,
 ):
     query = select(User).where(User.user_id == user_id)
     result = await session.execute(query)
@@ -129,7 +131,6 @@ async def orm_add_to_cart(session: AsyncSession, user_id: int, product_id: int):
     else:
         session.add(Cart(user_id=user_id, product_id=product_id, quantity=1))
         await session.commit()
-
 
 
 async def orm_get_user_carts(session: AsyncSession, user_id):
@@ -159,42 +160,3 @@ async def orm_reduce_product_in_cart(session: AsyncSession, user_id: int, produc
         await orm_delete_from_cart(session, user_id, product_id)
         await session.commit()
         return False
-
-
-""" Before lesson 8
-
-async def orm_add_product(session: AsyncSession, data: dict):
-    obj = Product(
-        name=data["name"],
-        description=data["description"],
-        price=float(data["price"]),
-        image=data["image"],
-    )
-    session.add(obj)
-    await session.commit()
-
-async def orm_get_products(session: AsyncSession):
-    query = select(Product)
-    result = await session.execute(query)
-    return result.scalars().all()
-
-async def orm_get_product(session: AsyncSession, product_id: int):
-    query = select(Product).where(Product.id == product_id)
-    result = await session.execute(query)
-    return result.scalar() # scalars() returns a list of Product objects, scalar() return a single Product object
-
-async def orm_update_product(session: AsyncSession, product_id: int, data: dict):
-    query = update(Product).where(Product.id == product_id).values(
-        name=data.get("name"),
-        description=data.get("description"),
-        price=data.get("price"),
-        image=data.get("image")
-    )
-    await session.execute(query)
-    await session.commit()
-
-async def orm_delete_product(session: AsyncSession, product_id: int):
-    query = delete(Product).where(Product.id == product_id)
-    await session.execute(query)
-    await session.commit()
-"""
