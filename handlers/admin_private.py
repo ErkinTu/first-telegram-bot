@@ -1,6 +1,6 @@
 from aiogram import F
 from aiogram import Router, types
-from aiogram.filters import Command, StateFilter, or_f
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
@@ -17,7 +17,7 @@ ADMIN_KB = get_keyboard(
     "Ассортимент",
     "Добавить/изменить баннер",
     placeholder="Выбрать действие",
-    sizes=(2,1),
+    sizes=(2, 1),
 )
 
 
@@ -45,22 +45,31 @@ async def add_product(message: types.Message):
 
 
 @admin_router.message(F.text == "Ассортимент")
-async def starring_at_product(message: types.Message, session: AsyncSession):
-    for product in await orm_get_products(session):
+async def admin_features(message: types.Message, session: AsyncSession):
+    categories = await orm_get_categories(session)
+    btns = {category.name: f'category_{category.id}' for category in categories}
+    await message.answer("Выберите категорию", reply_markup=get_callback_btns(btns=btns))
+
+
+@admin_router.callback_query(F.data.startswith('category_'))
+async def starring_at_product(callback: types.CallbackQuery, session: AsyncSession):
+    category_id = callback.data.split('category_')[-1]
+    for product in await orm_get_products(session, int(category_id)):
         caption = (
             f"<strong>{product.name}</strong>\n"
             f"{product.description}\n"
             f"Стоимость: {round(product.price, 2)} $."
         )
-        await message.answer_photo(
+        await callback.message.answer_photo(
             product.image,
             caption=caption,
             reply_markup=get_callback_btns(btns={
                 "Удалить товар": f"delete_{product.id}",
                 "Изменить товар": f"update_{product.id}"
-            })
+            }),
+            sizes=(2, 1),
         )
-    await message.answer("Ок, вот список товаров")
+    await callback.message.answer("Ок, вот список товаров")
 
 
 @admin_router.callback_query(F.data.startswith("delete_"))
@@ -83,7 +92,7 @@ async def update_product_callback(callback: types.CallbackQuery, state: FSMConte
     AddProduct.product_for_update = product_for_update_
     await callback.answer()
     await callback.message.answer(
-        "Введите новое название товара или '.' чтобы оставить как есть\n" 
+        "Введите новое название товара или '.' чтобы оставить как есть\n"
         f"{AddProduct.product_for_update.name}\n"
         f"{AddProduct.product_for_update.description}\n",
         reply_markup=types.ReplyKeyboardRemove()
@@ -95,12 +104,15 @@ async def update_product_callback(callback: types.CallbackQuery, state: FSMConte
 class AddBanner(StatesGroup):
     image = State()
 
+
 @admin_router.message(StateFilter(None), F.text == 'Добавить/изменить баннер')
 async def add_immage(message: types.Message, state: FSMContext, session: AsyncSession):
     pages_names = [page.name for page in await orm_get_info_pages(session)]
-    await message.answer(f"Отправьте фото баннера. \nВ описании укажите название для какой страницы: \n{', '.join(pages_names)}\n",
-                         reply_markup=types.ReplyKeyboardRemove())
+    await message.answer(
+        f"Отправьте фото баннера. \nВ описании укажите название для какой страницы: \n{', '.join(pages_names)}\n",
+        reply_markup=types.ReplyKeyboardRemove())
     await state.set_state(AddBanner.image)
+
 
 @admin_router.message(AddBanner.image, F.photo)
 async def add_banner(message: types.Message, state: FSMContext, session: AsyncSession):
@@ -212,7 +224,6 @@ async def add_description(message: types.Message, state: FSMContext, session: As
     await state.set_state(AddProduct.category)
 
 
-
 @admin_router.message(AddProduct.description)
 async def add_description(message: types.Message, state: FSMContext):
     await message.answer("Вы ввели не допустимые данные, введите описание товара заново")
@@ -303,9 +314,6 @@ async def add_photo(message: types.Message, state: FSMContext, session: AsyncSes
         await state.clear()
     else:
         await message.answer("Вы ввели не допустимые данные, прикрепите фото товара заново")
-
-
-
 
 # @admin_router.message(AddProduct.image, F.photo)
 # async def add_image(message: types.Message, state: FSMContext, session: AsyncSession):
