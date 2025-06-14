@@ -21,9 +21,7 @@ load_dotenv(find_dotenv())
 
 
 async def on_startup(bot: Bot):
-    run_param = False
-
-    # await db.drop_db() # для сброса базы при запуске
+    run_param = False # для сброса базы при запуске
 
     if run_param:
         await db.drop_db()
