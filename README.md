@@ -65,7 +65,7 @@
 4. Прикрепите изображение и в подписи укажите одну из категорий:
     - `main`, `about`, `payment`, `shipping`, `catalog`, `cart`
 
-!! Обязательно добавить баннера для всего из списка `main`, `about`, `payment`, `shipping`, `catalog`, `cart`
+‼️ Обязательно добавить баннера для всего из списка `main`, `about`, `payment`, `shipping`, `catalog`, `cart`
 
 ### Добавление товаров
 1. Введите `/admin`
